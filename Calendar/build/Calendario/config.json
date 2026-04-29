@@ -1,0 +1,7 @@
+{
+  "label":"Calendario",
+  "icon":"icon.png",
+  "iconsel":"icon.png",
+  "launch":"launch.sh",
+  "description":"Calendario"
+}
