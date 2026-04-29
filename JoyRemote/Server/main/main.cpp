@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -33,7 +33,7 @@ struct GamepadState {
 #define BTN_DPAD_L  (1 << 13)
 #define BTN_DPAD_R  (1 << 14)
 
-void applyState(PVIGEM_TARGET target, const GamepadState &state) {
+void applyState(PVIGEM_TARGET target, const GamepadState& state) {
     XUSB_REPORT report;
     ZeroMemory(&report, sizeof(report));
 
@@ -66,7 +66,7 @@ void applyState(PVIGEM_TARGET target, const GamepadState &state) {
 int main() {
     // --- Inicializar Winsock ---
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         fprintf(stderr, "WSAStartup failed\n");
         return 1;
     }
@@ -119,10 +119,11 @@ int main() {
 
     while (true) {
         int bytes = recvfrom(sock, (char*)&state, sizeof(state), 0,
-                             (sockaddr*)&clientAddr, &clientAddrSize);
+            (sockaddr*)&clientAddr, &clientAddrSize);
         if (bytes == sizeof(state)) {
             applyState(target, state);
-        } else if (bytes == SOCKET_ERROR) {
+        }
+        else if (bytes == SOCKET_ERROR) {
             int err = WSAGetLastError();
             if (err != WSAEWOULDBLOCK) {
                 fprintf(stderr, "Error en recvfrom: %d\n", err);
@@ -142,7 +143,3 @@ int main() {
     WSACleanup();
     return 0;
 }
-
-char client_ip[INET_ADDRSTRLEN];
-inet_ntop(AF_INET, &clientAddr.sin_addr, client_ip, sizeof(client_ip));
-printf("Datos recibidos de %s, actualizando mando...\n", client_ip);

@@ -1,0 +1,3 @@
+D:/Juegos/MicroTrimui/Apps/AleWiccan/TSP Apps/JoyRemote/Server/main/out/build/x64-debug/CMakeFiles/server.dir
+D:/Juegos/MicroTrimui/Apps/AleWiccan/TSP Apps/JoyRemote/Server/main/out/build/x64-debug/CMakeFiles/edit_cache.dir
+D:/Juegos/MicroTrimui/Apps/AleWiccan/TSP Apps/JoyRemote/Server/main/out/build/x64-debug/CMakeFiles/rebuild_cache.dir
