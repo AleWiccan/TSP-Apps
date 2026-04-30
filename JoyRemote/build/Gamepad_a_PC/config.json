@@ -1,7 +1,0 @@
-{
-  "label":"Gamepad a PC",
-  "icon":"icon.png",
-  "iconsel":"icon.png",
-  "launch":"launch.sh",
-  "description":"Usa la Trimui como un control XBOX en Windows"
-}

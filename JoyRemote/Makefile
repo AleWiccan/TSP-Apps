@@ -1,4 +1,4 @@
-APP_LABEL = Gamepad a PC
+APP_LABEL = GamepadPC
 APP_DESCRIPTION = Usa la Trimui como un control XBOX en Windows
 
 APP_LABEL_SLUG = $(shell echo "$(APP_LABEL)" | tr ' ' '_')

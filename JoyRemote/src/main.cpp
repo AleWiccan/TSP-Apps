@@ -24,6 +24,8 @@ struct GamepadState {
     int16_t leftY;
     int16_t rightX;
     int16_t rightY;
+	int16_t leftTrigger;
+    int16_t rightTrigger;
 };
 #pragma pack(pop)
 
@@ -112,8 +114,12 @@ bool InitSDL() {
         return false;
     }
 
-    window = SDL_CreateWindow("Gamepad UDP", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                              SCREEN_W, SCREEN_H, SDL_WINDOW_SHOWN);
+    SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "0");
+
+    window = SDL_CreateWindow("Gamepad UDP", 
+                              SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                              SCREEN_W, SCREEN_H, 
+                              SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
     if (!window) {
         fprintf(stderr, "Window: %s\n", SDL_GetError());
         return false;
@@ -246,10 +252,10 @@ void DrawControllerScreen() {
     drawBtn(btn_y, current_state.buttons & BTN_Y);
     
     // Etiquetas para botones
-    DrawText("A", btn_a.x + 35, btn_a.y + 35, white);
-    DrawText("B", btn_b.x + 35, btn_b.y + 35, white);
-    DrawText("X", btn_x.x + 35, btn_x.y + 35, white);
-    DrawText("Y", btn_y.x + 35, btn_y.y + 35, white);
+    DrawText("B", btn_a.x + 35, btn_a.y + 35, white);
+    DrawText("A", btn_b.x + 35, btn_b.y + 35, white);
+    DrawText("Y", btn_x.x + 35, btn_x.y + 35, white);
+    DrawText("X", btn_y.x + 35, btn_y.y + 35, white);
     
     // Sticks analógicos - Ahora en la parte inferior, más separados
     auto drawStick = [&](int cx, int cy, int16_t x, int16_t y, const char* label) {
@@ -295,7 +301,7 @@ void DrawControllerScreen() {
 void HandleConfigInput(SDL_Event &event, AppState &state) {
     if (event.type == SDL_CONTROLLERBUTTONDOWN) {
         switch (event.cbutton.button) {
-            case SDL_CONTROLLER_BUTTON_A: // Confirmar
+            case SDL_CONTROLLER_BUTTON_B: // Confirmar
                 {
                     int a,b,c,d;
                     sscanf(ip_buffer, "%d.%d.%d.%d", &a, &b, &c, &d);
@@ -304,7 +310,7 @@ void HandleConfigInput(SDL_Event &event, AppState &state) {
                     state = STATE_CONNECTING;
                 }
                 break;
-            case SDL_CONTROLLER_BUTTON_B: // Salir
+            case SDL_CONTROLLER_BUTTON_A: // Salir
                 state = STATE_QUIT;
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
@@ -386,6 +392,8 @@ void ProcessGamepadEvent(SDL_Event &event) {
             case SDL_CONTROLLER_AXIS_LEFTY:  current_state.leftY = event.caxis.value; break;
             case SDL_CONTROLLER_AXIS_RIGHTX: current_state.rightX = event.caxis.value; break;
             case SDL_CONTROLLER_AXIS_RIGHTY: current_state.rightY = event.caxis.value; break;
+			case SDL_CONTROLLER_AXIS_TRIGGERLEFT: current_state.leftTrigger = event.caxis.value; break;
+			case SDL_CONTROLLER_AXIS_TRIGGERRIGHT: current_state.rightTrigger = event.caxis.value; break;
         }
     }
 }
