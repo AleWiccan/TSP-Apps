@@ -3,8 +3,10 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdio.h>
-#include <cstdint>   // para uint16_t, int16_t, etc.
+#include <cstdint>
 #include <ViGEm/Client.h>
+#include <vector>
+#include <string>
 
 #pragma pack(push, 1)
 struct GamepadState {
@@ -31,10 +33,8 @@ struct GamepadState {
 #define BTN_DPAD_L  (1 << 13)
 #define BTN_DPAD_R  (1 << 14)
 
-// Ahora recibe el cliente como primer parámetro
 void applyState(PVIGEM_CLIENT client, PVIGEM_TARGET target, const GamepadState& state) {
-    XUSB_REPORT report;
-    ZeroMemory(&report, sizeof(report));
+    XUSB_REPORT report{};
 
     if (state.buttons & BTN_A)      report.wButtons |= XUSB_GAMEPAD_A;
     if (state.buttons & BTN_B)      report.wButtons |= XUSB_GAMEPAD_B;
@@ -56,10 +56,52 @@ void applyState(PVIGEM_CLIENT client, PVIGEM_TARGET target, const GamepadState& 
     report.sThumbLY = state.leftY;
     report.sThumbRX = state.rightX;
     report.sThumbRY = state.rightY;
-    report.bLeftTrigger = static_cast<uint8_t>(state.leftTrigger >> 8); // Escala 0-32767 → 0-255
+    report.bLeftTrigger = static_cast<uint8_t>(state.leftTrigger >> 8);
     report.bRightTrigger = static_cast<uint8_t>(state.rightTrigger >> 8);
 
     vigem_target_x360_update(client, target, report);
+}
+
+// Imprime las direcciones IP locales (IPv4, no loopback)
+void PrintLocalIPs() {
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) == 0) {
+        struct addrinfo hints = {}, * result = nullptr;
+        hints.ai_family = AF_INET;      // Solo IPv4
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+
+        if (getaddrinfo(hostname, nullptr, &hints, &result) == 0) {
+            std::vector<std::string> ips;
+            for (struct addrinfo* ptr = result; ptr != nullptr; ptr = ptr->ai_next) {
+                struct sockaddr_in* addr = (struct sockaddr_in*)ptr->ai_addr;
+                char ipStr[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &addr->sin_addr, ipStr, sizeof(ipStr));
+                // Excluir loopback
+                if (strcmp(ipStr, "127.0.0.1") != 0) {
+                    ips.push_back(ipStr);
+                }
+            }
+            freeaddrinfo(result);
+
+            if (!ips.empty()) {
+                printf("\nDirecciones IP disponibles para conectar la consola:\n");
+                for (const auto& ip : ips) {
+                    printf("  - %s\n", ip.c_str());
+                }
+                printf("\n");
+            }
+            else {
+                printf("No se encontraron direcciones IPv4 (no loopback). Verifica la red.\n");
+            }
+        }
+        else {
+            printf("Error al obtener información de red.\n");
+        }
+    }
+    else {
+        printf("Error al obtener el nombre del host.\n");
+    }
 }
 
 int main() {
@@ -128,6 +170,9 @@ int main() {
 
     printf("Servidor listo. Esperando datos en puerto 8888...\n");
 
+    // Mostrar las IPs disponibles
+    PrintLocalIPs();
+
     GamepadState state;
     sockaddr_in clientAddr;
     int clientAddrSize = sizeof(clientAddr);
@@ -136,7 +181,7 @@ int main() {
         int bytes = recvfrom(sock, (char*)&state, sizeof(state), 0,
             (sockaddr*)&clientAddr, &clientAddrSize);
         if (bytes == sizeof(state)) {
-            applyState(client, target, state);   // ← ahora pasamos client
+            applyState(client, target, state);
         }
         else if (bytes == SOCKET_ERROR) {
             int err = WSAGetLastError();
