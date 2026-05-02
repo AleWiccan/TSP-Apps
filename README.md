@@ -5,8 +5,6 @@ Listas para usar:
 Calculadora
 Reloj
 Calendario
-
-En desarrollo:
 Gamepad a PC
 
 # Como instalar:
