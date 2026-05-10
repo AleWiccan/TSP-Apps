@@ -14,17 +14,17 @@ using namespace std;
 // ---------- Constantes ----------
 #define DEFAULT_PORT 8888
 #define CONFIG_FILE  "server.cfg"
-#define FONT_PATH    "font.ttf"   // Ruta relativa al ejecutable
+#define FONT_PATH    "font.ttf"
 
 // ---------- Estructura del paquete ----------
 #pragma pack(push, 1)
 struct GamepadState {
-    uint16_t buttons;      // máscara de botones
+    uint16_t buttons;
     int16_t leftX;
     int16_t leftY;
     int16_t rightX;
     int16_t rightY;
-	int16_t leftTrigger;
+    int16_t leftTrigger;
     int16_t rightTrigger;
 };
 #pragma pack(pop)
@@ -58,33 +58,31 @@ enum AppState {
 SDL_Window   *window   = nullptr;
 SDL_Renderer *renderer = nullptr;
 TTF_Font     *font     = nullptr;
-// ✅ Resolución corregida a 1280x720
 const int SCREEN_W = 1280;
 const int SCREEN_H = 720;
 
-// Gamepad
 SDL_GameController *controller = nullptr;
 GamepadState current_state;
 
-// Red
 int sock = -1;
 sockaddr_in server_addr;
 bool server_addr_valid = false;
 string server_ip = "192.168.1.100";
 int server_port = DEFAULT_PORT;
 
-// Interfaz de configuración
-int cursor_pos = 0;       // índice del carácter que se edita (0..14, puntos fijos no editables)
-char ip_buffer[16] = "192.168.001.100"; // siempre 15 caracteres + null
+int cursor_pos = 0;
+char ip_buffer[16] = "192.168.001.100";
 
-// Cargar IP desde archivo
+// Mensaje de error personalizado
+string error_message = "";
+
 void LoadConfig() {
     FILE *f = fopen(CONFIG_FILE, "r");
     if (f) {
         char ip[32];
         if (fgets(ip, sizeof(ip), f)) {
             ip[strcspn(ip, "\r\n")] = 0;
-            int a, b, c, d;                          // ← variables locales
+            int a, b, c, d;
             if (sscanf(ip, "%d.%d.%d.%d", &a, &b, &c, &d) == 4) {
                 server_ip = ip;
                 snprintf(ip_buffer, sizeof(ip_buffer), "%03d.%03d.%03d.%03d", a, b, c, d);
@@ -94,7 +92,6 @@ void LoadConfig() {
     }
 }
 
-// Guardar IP en archivo
 void SaveConfig() {
     FILE *f = fopen(CONFIG_FILE, "w");
     if (f) {
@@ -103,7 +100,6 @@ void SaveConfig() {
     }
 }
 
-// Inicializar SDL y gamepad
 bool InitSDL() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
@@ -116,9 +112,9 @@ bool InitSDL() {
 
     SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "0");
 
-    window = SDL_CreateWindow("Gamepad UDP", 
+    window = SDL_CreateWindow("Gamepad UDP",
                               SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                              SCREEN_W, SCREEN_H, 
+                              SCREEN_W, SCREEN_H,
                               SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
     if (!window) {
         fprintf(stderr, "Window: %s\n", SDL_GetError());
@@ -130,13 +126,12 @@ bool InitSDL() {
         return false;
     }
 
-    font = TTF_OpenFont(FONT_PATH, 36); // ✅ Tamaño de fuente aumentado para mejor legibilidad en 720p
+    font = TTF_OpenFont(FONT_PATH, 36);
     if (!font) {
         fprintf(stderr, "Font: %s\n", TTF_GetError());
         return false;
     }
 
-    // Abrir el primer mando
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
             controller = SDL_GameControllerOpen(i);
@@ -151,7 +146,6 @@ bool InitSDL() {
     return true;
 }
 
-// Dibujar texto centrado en x, y
 void DrawText(const char *text, int x, int y, SDL_Color color, bool centered = true) {
     SDL_Surface *surf = TTF_RenderText_Solid(font, text, color);
     if (!surf) return;
@@ -171,22 +165,21 @@ void DrawText(const char *text, int x, int y, SDL_Color color, bool centered = t
     SDL_DestroyTexture(tex);
 }
 
-// ---------- Dibujar pantalla de configuración ----------
+// ---------- Pantalla de configuración (con posible mensaje de error) ----------
 void DrawConfigScreen() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
     SDL_Color white = {255,255,255,255};
     SDL_Color yellow = {255,255,0,255};
-    
-    // ✅ Títulos e instrucciones reposicionados para 1280x720
-    DrawText("CONFIGURAR SERVIDOR", SCREEN_W/2, 80, white);
-    DrawText("Editar IP con D-Pad, Confirmar=A, Cancelar=B", SCREEN_W/2, 150, white);
+    SDL_Color red = {255,0,0,255};
 
-    // ✅ Dibujar el buffer con el cursor, ahora más grande y centrado
+    DrawText("CONFIGURAR SERVIDOR", SCREEN_W/2, 80, white);
+    DrawText("Editar IP con D-Pad, Confirmar=B, Cancelar=A", SCREEN_W/2, 150, white);
+
     char display[32];
     snprintf(display, sizeof(display), "%s", ip_buffer);
-    int char_width = 28; // Aproximado para fuente 36
+    int char_width = 28;
     int start_x = SCREEN_W/2 - (15 * char_width) / 2;
     for (int i = 0; i < 15; i++) {
         char c[2] = {display[i], 0};
@@ -194,112 +187,117 @@ void DrawConfigScreen() {
         DrawText(c, start_x + i * char_width + char_width/2, 250, color);
     }
     DrawText("IP:", start_x - 60, 250, white, false);
-    
-    // Mostrar IP actual guardada
+
     string saved_msg = "IP guardada: " + server_ip;
     DrawText(saved_msg.c_str(), SCREEN_W/2, 350, white);
+
+    // Mostrar mensaje de error si existe
+    if (!error_message.empty()) {
+        DrawText(error_message.c_str(), SCREEN_W/2, 420, red);
+    }
 }
 
-// ---------- Dibujar pantalla de mando ----------
+// ---------- Pantalla del mando (cruceta con color rojo activo, gris inactivo) ----------
 void DrawControllerScreen() {
     SDL_SetRenderDrawColor(renderer, 20, 20, 40, 255);
     SDL_RenderClear(renderer);
 
     SDL_Color green = {0,255,0,255};
     SDL_Color white = {255,255,255,255};
-    
-    // ✅ Información de conexión reposicionada
+    SDL_Color gray = {100,100,100,255};
+    SDL_Color active_red = {255,0,0,255};
+
     DrawText(("Conectado a " + server_ip + ":" + to_string(server_port)).c_str(), SCREEN_W/2, 30, green);
 
-    // ✅ Representación del mando escalada y reposicionada
-    // Las coordenadas se han ajustado para una distribución equilibrada en 1280x720
-    
-    // Cruceta (D-Pad) - Ahora en la esquina superior izquierda
+    // Cruceta
     int dpad_center_x = 150;
     int dpad_center_y = 250;
     SDL_Rect d_up    = {dpad_center_x - 25, dpad_center_y - 70, 50, 50};
     SDL_Rect d_down  = {dpad_center_x - 25, dpad_center_y + 20, 50, 50};
     SDL_Rect d_left  = {dpad_center_x - 70, dpad_center_y - 25, 50, 50};
     SDL_Rect d_right = {dpad_center_x + 20, dpad_center_y - 25, 50, 50};
-    
-    SDL_SetRenderDrawColor(renderer, (current_state.buttons & BTN_DPAD_U) ? 0 : 100, 255, 0, 255);
-    SDL_RenderFillRect(renderer, &d_up);
-    SDL_SetRenderDrawColor(renderer, (current_state.buttons & BTN_DPAD_D) ? 0 : 100, 255, 0, 255);
-    SDL_RenderFillRect(renderer, &d_down);
-    SDL_SetRenderDrawColor(renderer, (current_state.buttons & BTN_DPAD_L) ? 0 : 100, 255, 0, 255);
-    SDL_RenderFillRect(renderer, &d_left);
-    SDL_SetRenderDrawColor(renderer, (current_state.buttons & BTN_DPAD_R) ? 0 : 100, 255, 0, 255);
-    SDL_RenderFillRect(renderer, &d_right);
-    
-    // Etiquetas para la cruceta
+
+    auto drawDpadBtn = [&](SDL_Rect r, bool pressed) {
+        SDL_Color color = pressed ? active_red : gray;
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
+        SDL_RenderFillRect(renderer, &r);
+    };
+
+    drawDpadBtn(d_up, current_state.buttons & BTN_DPAD_U);
+    drawDpadBtn(d_down, current_state.buttons & BTN_DPAD_D);
+    drawDpadBtn(d_left, current_state.buttons & BTN_DPAD_L);
+    drawDpadBtn(d_right, current_state.buttons & BTN_DPAD_R);
+
     DrawText("D-Pad", dpad_center_x, dpad_center_y - 120, white);
-    
-    // Botones A/B/X/Y - Ahora en la esquina superior derecha
+
+    // Botones ABXY
     int btn_center_x = 1130;
     int btn_center_y = 250;
     SDL_Rect btn_a = {btn_center_x - 35, btn_center_y - 35, 70, 70};
     SDL_Rect btn_b = {btn_center_x + 35, btn_center_y - 105, 70, 70};
     SDL_Rect btn_x = {btn_center_x - 105, btn_center_y - 105, 70, 70};
     SDL_Rect btn_y = {btn_center_x - 35, btn_center_y - 175, 70, 70};
-    
+
     auto drawBtn = [&](SDL_Rect r, bool pressed) {
-        SDL_SetRenderDrawColor(renderer, pressed ? 0 : 150, pressed ? 255 : 150, 0, 255);
+        SDL_Color color = pressed ? active_red : gray;
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
         SDL_RenderFillRect(renderer, &r);
     };
+
     drawBtn(btn_a, current_state.buttons & BTN_A);
     drawBtn(btn_b, current_state.buttons & BTN_B);
     drawBtn(btn_x, current_state.buttons & BTN_X);
     drawBtn(btn_y, current_state.buttons & BTN_Y);
-    
-    // Etiquetas para botones
+
     DrawText("B", btn_a.x + 35, btn_a.y + 35, white);
     DrawText("A", btn_b.x + 35, btn_b.y + 35, white);
     DrawText("Y", btn_x.x + 35, btn_x.y + 35, white);
     DrawText("X", btn_y.x + 35, btn_y.y + 35, white);
-    
-    // Sticks analógicos - Ahora en la parte inferior, más separados
+
+    // Sticks analógicos
     auto drawStick = [&](int cx, int cy, int16_t x, int16_t y, const char* label) {
-        // Círculo exterior
         for (int w = 0; w < 360; w++) {
             SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
             SDL_RenderDrawPoint(renderer, cx + (int)(60 * cos(w * M_PI/180)),
                                 cy + (int)(60 * sin(w * M_PI/180)));
         }
-        // Punto móvil
         int dx = (x / 32767.0) * 45;
-        int dy = (y / 32767.0) * 45;
+        int dy = (y / 32767.0) * 45; // ahora con Y invertido, el dibujo también se refleja correctamente
         SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
         SDL_RenderDrawLine(renderer, cx, cy, cx + dx, cy + dy);
         SDL_Rect dot = {cx + dx - 8, cy + dy - 8, 16, 16};
         SDL_RenderFillRect(renderer, &dot);
-        
-        // Etiqueta del stick
         DrawText(label, cx, cy - 100, white);
     };
-    
+
     drawStick(350, 550, current_state.leftX, current_state.leftY, "Joystick Izquierdo");
     drawStick(930, 550, current_state.rightX, current_state.rightY, "Joystick Derecho");
-    
-    // Botones adicionales (L1, R1, Start, Select)
-    SDL_Color lb_color = (current_state.buttons & BTN_LB) ? green : white;
-    DrawText("L1", 50, 600, lb_color, false);
-    
-    SDL_Color rb_color = (current_state.buttons & BTN_RB) ? green : white;
-    DrawText("R1", 1200, 600, rb_color, false);
-    
-    SDL_Color start_color = (current_state.buttons & BTN_START) ? green : white;
+
+    // Gatillos L2/R2 (se iluminan rojos al presionar, gris en reposo)
+    SDL_Color l2_color = (current_state.leftTrigger > 0) ? active_red : gray;
+    DrawText("L2", 50, 600, l2_color, false);
+    SDL_Color r2_color = (current_state.rightTrigger > 0) ? active_red : gray;
+    DrawText("R2", 1200, 600, r2_color, false);
+
+    // L1/R1
+    SDL_Color lb_color = (current_state.buttons & BTN_LB) ? active_red : gray;
+    DrawText("L1", 50, 640, lb_color, false);
+    SDL_Color rb_color = (current_state.buttons & BTN_RB) ? active_red : gray;
+    DrawText("R1", 1200, 640, rb_color, false);
+
+    // Start/Select
+    SDL_Color start_color = (current_state.buttons & BTN_START) ? active_red : gray;
     DrawText("START", SCREEN_W/2, 670, start_color);
-    
-    SDL_Color back_color = (current_state.buttons & BTN_BACK) ? green : white;
+    SDL_Color back_color = (current_state.buttons & BTN_BACK) ? active_red : gray;
     DrawText("SELECT", SCREEN_W/2 - 200, 670, back_color);
-    
-    // Instrucción para volver a configuración
-    DrawText("START+SELECT para volver a configuracion", SCREEN_W/2, 700, white);
+
+    DrawText("START+SELECT para salir", SCREEN_W/2, 700, white);
 }
 
-// Procesar entrada de configuración
+// Procesar entrada en configuración
 void HandleConfigInput(SDL_Event &event, AppState &state) {
     if (event.type == SDL_CONTROLLERBUTTONDOWN) {
+        error_message = ""; // limpiar error al interactuar
         switch (event.cbutton.button) {
             case SDL_CONTROLLER_BUTTON_B: // Confirmar
                 {
@@ -342,7 +340,6 @@ void HandleConfigInput(SDL_Event &event, AppState &state) {
     }
 }
 
-// Intentar conectar por UDP
 bool ConnectToServer() {
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) return false;
@@ -359,7 +356,7 @@ bool ConnectToServer() {
     return true;
 }
 
-// Actualizar estado del gamepad desde los eventos
+// Actualizar estado del gamepad
 void ProcessGamepadEvent(SDL_Event &event) {
     if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
         Uint8 sdl_btn = event.cbutton.button;
@@ -389,11 +386,16 @@ void ProcessGamepadEvent(SDL_Event &event) {
     if (event.type == SDL_CONTROLLERAXISMOTION) {
         switch (event.caxis.axis) {
             case SDL_CONTROLLER_AXIS_LEFTX:  current_state.leftX = event.caxis.value; break;
-            case SDL_CONTROLLER_AXIS_LEFTY:  current_state.leftY = event.caxis.value; break;
+            case SDL_CONTROLLER_AXIS_LEFTY:  current_state.leftY = -event.caxis.value; break; // invertir Y
             case SDL_CONTROLLER_AXIS_RIGHTX: current_state.rightX = event.caxis.value; break;
-            case SDL_CONTROLLER_AXIS_RIGHTY: current_state.rightY = event.caxis.value; break;
-			case SDL_CONTROLLER_AXIS_TRIGGERLEFT: current_state.leftTrigger = event.caxis.value; break;
-			case SDL_CONTROLLER_AXIS_TRIGGERRIGHT: current_state.rightTrigger = event.caxis.value; break;
+            case SDL_CONTROLLER_AXIS_RIGHTY: current_state.rightY = -event.caxis.value; break; // invertir Y
+            case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
+                // Máxima intensidad al pulsar (digital)
+                current_state.leftTrigger = (event.caxis.value > 0) ? 32767 : 0;
+                break;
+            case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+                current_state.rightTrigger = (event.caxis.value > 0) ? 32767 : 0;
+                break;
         }
     }
 }
@@ -426,8 +428,9 @@ int main(int argc, char *argv[]) {
         if (state == STATE_CONNECTING) {
             if (ConnectToServer()) {
                 state = STATE_CONNECTED;
+                error_message = "";
             } else {
-                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "No se pudo conectar al servidor.", window);
+                error_message = "Error: No se pudo conectar a " + server_ip;
                 state = STATE_CONFIG;
             }
         }
@@ -439,15 +442,20 @@ int main(int argc, char *argv[]) {
                        (sockaddr*)&server_addr, sizeof(server_addr));
                 lastSend = now;
             }
+            // START+SELECT -> salir, enviando antes estado vacío
             if ((current_state.buttons & BTN_START) && (current_state.buttons & BTN_BACK)) {
-                state = STATE_CONFIG;
-                if (sock >= 0) { close(sock); sock = -1; }
-                server_addr_valid = false;
-                SDL_Delay(500);
+                // Enviar estado completamente limpio
+                GamepadState zero_state;
+                memset(&zero_state, 0, sizeof(zero_state));
+                sendto(sock, &zero_state, sizeof(zero_state), 0,
+                       (sockaddr*)&server_addr, sizeof(server_addr));
+                // Pequeña pausa para que se transmita
+                SDL_Delay(50);
+                running = false;
             }
         }
 
-        // Renderizado según estado
+        // Renderizado
         if (state == STATE_CONFIG) {
             DrawConfigScreen();
         } else if (state == STATE_CONNECTED) {
