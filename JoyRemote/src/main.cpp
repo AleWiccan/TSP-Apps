@@ -11,12 +11,10 @@
 
 using namespace std;
 
-// ---------- Constantes ----------
 #define DEFAULT_PORT 8888
 #define CONFIG_FILE  "server.cfg"
 #define FONT_PATH    "font.ttf"
 
-// ---------- Estructura del paquete ----------
 #pragma pack(push, 1)
 struct GamepadState {
     uint16_t buttons;
@@ -29,7 +27,6 @@ struct GamepadState {
 };
 #pragma pack(pop)
 
-// Mapeo de botones
 #define BTN_A       (1 << 0)
 #define BTN_B       (1 << 1)
 #define BTN_X       (1 << 2)
@@ -46,7 +43,6 @@ struct GamepadState {
 #define BTN_DPAD_L  (1 << 13)
 #define BTN_DPAD_R  (1 << 14)
 
-// ---------- Estados de la aplicación ----------
 enum AppState {
     STATE_CONFIG,
     STATE_CONNECTING,
@@ -54,7 +50,6 @@ enum AppState {
     STATE_QUIT
 };
 
-// ---------- Variables globales ----------
 SDL_Window   *window   = nullptr;
 SDL_Renderer *renderer = nullptr;
 TTF_Font     *font     = nullptr;
@@ -62,7 +57,7 @@ const int SCREEN_W = 1280;
 const int SCREEN_H = 720;
 
 SDL_GameController *controller = nullptr;
-GamepadState current_state;
+GamepadState current_state; // global, automáticamente a cero
 
 int sock = -1;
 sockaddr_in server_addr;
@@ -72,8 +67,6 @@ int server_port = DEFAULT_PORT;
 
 int cursor_pos = 0;
 char ip_buffer[16] = "192.168.001.100";
-
-// Mensaje de error personalizado
 string error_message = "";
 
 void LoadConfig() {
@@ -165,7 +158,6 @@ void DrawText(const char *text, int x, int y, SDL_Color color, bool centered = t
     SDL_DestroyTexture(tex);
 }
 
-// ---------- Pantalla de configuración (con posible mensaje de error) ----------
 void DrawConfigScreen() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
@@ -191,13 +183,11 @@ void DrawConfigScreen() {
     string saved_msg = "IP guardada: " + server_ip;
     DrawText(saved_msg.c_str(), SCREEN_W/2, 350, white);
 
-    // Mostrar mensaje de error si existe
     if (!error_message.empty()) {
         DrawText(error_message.c_str(), SCREEN_W/2, 420, red);
     }
 }
 
-// ---------- Pantalla del mando (cruceta con color rojo activo, gris inactivo) ----------
 void DrawControllerScreen() {
     SDL_SetRenderDrawColor(renderer, 20, 20, 40, 255);
     SDL_RenderClear(renderer);
@@ -254,7 +244,7 @@ void DrawControllerScreen() {
     DrawText("Y", btn_x.x + 35, btn_x.y + 35, white);
     DrawText("X", btn_y.x + 35, btn_y.y + 35, white);
 
-    // Sticks analógicos
+    // Sticks analógicos (representación corregida)
     auto drawStick = [&](int cx, int cy, int16_t x, int16_t y, const char* label) {
         for (int w = 0; w < 360; w++) {
             SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
@@ -262,7 +252,7 @@ void DrawControllerScreen() {
                                 cy + (int)(60 * sin(w * M_PI/180)));
         }
         int dx = (x / 32767.0) * 45;
-        int dy = (y / 32767.0) * 45; // ahora con Y invertido, el dibujo también se refleja correctamente
+        int dy = -(y / 32767.0) * 45;   // invertido para que coincida con la pantalla
         SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
         SDL_RenderDrawLine(renderer, cx, cy, cx + dx, cy + dy);
         SDL_Rect dot = {cx + dx - 8, cy + dy - 8, 16, 16};
@@ -273,19 +263,17 @@ void DrawControllerScreen() {
     drawStick(350, 550, current_state.leftX, current_state.leftY, "Joystick Izquierdo");
     drawStick(930, 550, current_state.rightX, current_state.rightY, "Joystick Derecho");
 
-    // Gatillos L2/R2 (se iluminan rojos al presionar, gris en reposo)
+    // Gatillos L2/R2
     SDL_Color l2_color = (current_state.leftTrigger > 0) ? active_red : gray;
     DrawText("L2", 50, 600, l2_color, false);
     SDL_Color r2_color = (current_state.rightTrigger > 0) ? active_red : gray;
     DrawText("R2", 1200, 600, r2_color, false);
 
-    // L1/R1
     SDL_Color lb_color = (current_state.buttons & BTN_LB) ? active_red : gray;
     DrawText("L1", 50, 640, lb_color, false);
     SDL_Color rb_color = (current_state.buttons & BTN_RB) ? active_red : gray;
     DrawText("R1", 1200, 640, rb_color, false);
 
-    // Start/Select
     SDL_Color start_color = (current_state.buttons & BTN_START) ? active_red : gray;
     DrawText("START", SCREEN_W/2, 670, start_color);
     SDL_Color back_color = (current_state.buttons & BTN_BACK) ? active_red : gray;
@@ -294,10 +282,9 @@ void DrawControllerScreen() {
     DrawText("START+SELECT para salir", SCREEN_W/2, 700, white);
 }
 
-// Procesar entrada en configuración
 void HandleConfigInput(SDL_Event &event, AppState &state) {
     if (event.type == SDL_CONTROLLERBUTTONDOWN) {
-        error_message = ""; // limpiar error al interactuar
+        error_message = "";
         switch (event.cbutton.button) {
             case SDL_CONTROLLER_BUTTON_B: // Confirmar
                 {
@@ -356,7 +343,6 @@ bool ConnectToServer() {
     return true;
 }
 
-// Actualizar estado del gamepad
 void ProcessGamepadEvent(SDL_Event &event) {
     if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
         Uint8 sdl_btn = event.cbutton.button;
@@ -386,11 +372,10 @@ void ProcessGamepadEvent(SDL_Event &event) {
     if (event.type == SDL_CONTROLLERAXISMOTION) {
         switch (event.caxis.axis) {
             case SDL_CONTROLLER_AXIS_LEFTX:  current_state.leftX = event.caxis.value; break;
-            case SDL_CONTROLLER_AXIS_LEFTY:  current_state.leftY = -event.caxis.value; break; // invertir Y
+            case SDL_CONTROLLER_AXIS_LEFTY:  current_state.leftY = -event.caxis.value; break;
             case SDL_CONTROLLER_AXIS_RIGHTX: current_state.rightX = event.caxis.value; break;
-            case SDL_CONTROLLER_AXIS_RIGHTY: current_state.rightY = -event.caxis.value; break; // invertir Y
+            case SDL_CONTROLLER_AXIS_RIGHTY: current_state.rightY = -event.caxis.value; break;
             case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
-                // Máxima intensidad al pulsar (digital)
                 current_state.leftTrigger = (event.caxis.value > 0) ? 32767 : 0;
                 break;
             case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
@@ -427,10 +412,41 @@ int main(int argc, char *argv[]) {
 
         if (state == STATE_CONNECTING) {
             if (ConnectToServer()) {
-                state = STATE_CONNECTED;
-                error_message = "";
+                // Enviar ping
+                GamepadState ping;
+                memset(&ping, 0, sizeof(ping));
+                ping.buttons = BTN_GUIDE | BTN_START;
+                sendto(sock, &ping, sizeof(ping), 0,
+                       (sockaddr*)&server_addr, sizeof(server_addr));
+
+                // Esperar respuesta
+                bool ack_received = false;
+                Uint32 start_wait = SDL_GetTicks();
+                while (SDL_GetTicks() - start_wait < 2000) {
+                    GamepadState pong;
+                    sockaddr_in from;
+                    socklen_t fromlen = sizeof(from);
+                    int n = recvfrom(sock, (char*)&pong, sizeof(pong), 0,
+                                     (sockaddr*)&from, &fromlen);
+                    if (n == sizeof(pong) && pong.buttons == (BTN_GUIDE | BTN_BACK)) {
+                        ack_received = true;
+                        break;
+                    }
+                    SDL_Delay(10);
+                }
+
+                if (ack_received) {
+                    state = STATE_CONNECTED;
+                    error_message = "";
+                } else {
+                    error_message = "Error: El servidor no respondio en " + server_ip;
+                    close(sock);
+                    sock = -1;
+                    server_addr_valid = false;
+                    state = STATE_CONFIG;
+                }
             } else {
-                error_message = "Error: No se pudo conectar a " + server_ip;
+                error_message = "Error: Direccion IP no valida";
                 state = STATE_CONFIG;
             }
         }
@@ -442,20 +458,16 @@ int main(int argc, char *argv[]) {
                        (sockaddr*)&server_addr, sizeof(server_addr));
                 lastSend = now;
             }
-            // START+SELECT -> salir, enviando antes estado vacío
             if ((current_state.buttons & BTN_START) && (current_state.buttons & BTN_BACK)) {
-                // Enviar estado completamente limpio
                 GamepadState zero_state;
                 memset(&zero_state, 0, sizeof(zero_state));
                 sendto(sock, &zero_state, sizeof(zero_state), 0,
                        (sockaddr*)&server_addr, sizeof(server_addr));
-                // Pequeña pausa para que se transmita
                 SDL_Delay(50);
                 running = false;
             }
         }
 
-        // Renderizado
         if (state == STATE_CONFIG) {
             DrawConfigScreen();
         } else if (state == STATE_CONNECTED) {
@@ -470,7 +482,6 @@ int main(int argc, char *argv[]) {
         if (state == STATE_QUIT) running = false;
     }
 
-    // Limpieza
     if (controller) SDL_GameControllerClose(controller);
     if (sock >= 0) close(sock);
     if (font) TTF_CloseFont(font);
