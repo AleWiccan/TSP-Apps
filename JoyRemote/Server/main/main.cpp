@@ -181,6 +181,17 @@ int main() {
         int bytes = recvfrom(sock, (char*)&state, sizeof(state), 0,
             (sockaddr*)&clientAddr, &clientAddrSize);
         if (bytes == sizeof(state)) {
+            // Handshake: si el cliente envía todos los botones con BTN_GUIDE + BTN_START, responder con un ack
+            if (state.buttons == (BTN_GUIDE | BTN_START)) {
+                // Responder con un paquete de confirmación (usamos un estado con BTN_GUIDE + BTN_BACK)
+                GamepadState ack;
+                ZeroMemory(&ack, sizeof(ack));
+                ack.buttons = BTN_GUIDE | BTN_BACK;
+                sendto(sock, (const char*)&ack, sizeof(ack), 0,
+                       (const sockaddr*)&clientAddr, sizeof(clientAddr));
+                continue; // no actualizar el mando
+            }
+            // Si no es handshake, actualiza el mando normalmente
             applyState(client, target, state);
         }
         else if (bytes == SOCKET_ERROR) {

@@ -13,10 +13,7 @@
   },
   "ExpandedNodes": [
     "",
-    "\\ViGEmClient",
-    "\\ViGEmClient\\src\\x64",
-    "\\ViGEmClient\\src\\x64\\Release_DLL"
+    "\\ViGEmClient"
   ],
-  "SelectedNode": "\\CMakeLists.txt",
   "PreviewInSolutionExplorer": false
 }
