@@ -1,0 +1,7 @@
+{
+"label":"FTP GUI",
+"icon":"icon.png",
+"iconsel":"icon.png",
+"launch":"launch.sh",
+"description":"Servidor FTP con interfaz grafica"
+}
