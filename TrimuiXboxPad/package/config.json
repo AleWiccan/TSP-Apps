@@ -1,0 +1,7 @@
+{
+  "label": "Xbox Pad BT",
+  "icon": "icon.png",
+  "iconsel": "icon.png",
+  "launch": "launch.sh",
+  "description": "Usa la Trimui como gamepad Bluetooth HID generico"
+}
