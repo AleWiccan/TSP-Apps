@@ -8,6 +8,7 @@ Listas para usar:
 * Calendario
 * Gamepad a PC
 * Reproductor de Musica
+* FTP con interfaz gráfica
 * Usar la consola como Mando Xinput/Xbox
 
 # Como instalar:
